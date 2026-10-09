@@ -1,0 +1,453 @@
+{
+  "info": {
+    "name": "Prueba Técnica - Consulta de cuentas y saldos",
+    "description": "Ejecute con Docker Compose y el perfil local del core. Las peticiones de simulación cambian el estado del core; la última lo restaura a normal.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "businessBaseUrl",
+      "value": "http://127.0.0.1:3000",
+      "type": "string"
+    },
+    {
+      "key": "coreBaseUrl",
+      "value": "http://127.0.0.1:3001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Consultas",
+      "description": "Consultas de negocio con el core en modo normal.",
+      "item": [
+        {
+          "name": "Activar normal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{coreBaseUrl}}/__admin/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"normal\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Modo aplicado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().modo).to.eql(\"normal\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cliente con cuentas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Tres cuentas y totales correctos\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.customerId).to.eql(\"12345678\");",
+                  "    pm.expect(body.accounts).to.have.lengthOf(3);",
+                  "    pm.expect(body.accounts.filter(a => a.status === \"BLOCKED\")).to.have.lengthOf(1);",
+                  "    pm.expect(body.totalAvailableByCurrency).to.eql({ PEN: \"1450.00\", USD: \"300.00\" });",
+                  "    pm.expect(body.requestId).to.eql(pm.response.headers.get(\"X-Request-Id\"));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Filtrar cuentas PEN",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts?currency=PEN"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Dos cuentas PEN y total 1450.00\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.accounts).to.have.lengthOf(2);",
+                  "    pm.expect(body.accounts.every(a => a.currency === \"PEN\")).to.be.true;",
+                  "    pm.expect(body.totalAvailableByCurrency).to.eql({ PEN: \"1450.00\" });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cliente sin cuentas",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/87654321/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Cliente existente con lista vacía\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.customerId).to.eql(\"87654321\");",
+                  "    pm.expect(body.accounts).to.eql([]);",
+                  "    pm.expect(body.totalAvailableByCurrency).to.eql({});",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cliente inexistente - inglés",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/99999999/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 y mensaje en inglés por defecto\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(\"CUSTOMER_NOT_FOUND\");",
+                  "    pm.expect(body.message).to.eql(\"Customer not found\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cliente inexistente - español",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "es"
+              }
+            ],
+            "url": "{{businessBaseUrl}}/v1/customers/99999999/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"404 y mensaje en español\", function () {",
+                  "    pm.response.to.have.status(404);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql(\"CUSTOMER_NOT_FOUND\");",
+                  "    pm.expect(body.message).to.eql(\"Cliente no encontrado\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Moneda inválida",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts?currency=EUR"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"400 por moneda no admitida\", function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql(\"INVALID_CURRENCY\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Fallas simuladas",
+      "description": "Ejecutar en este orden. Si se interrumpe, enviar manualmente la petición Activar normal al final.",
+      "item": [
+        {
+          "name": "Activar slow",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{coreBaseUrl}}/__admin/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"slow\",\n  \"delayMs\": 2000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Modo aplicado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().modo).to.eql(\"slow\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar durante lentitud - 504",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 504 y código CORE_TIMEOUT\", function () {",
+                  "    pm.response.to.have.status(504);",
+                  "    pm.expect(pm.response.json().code).to.eql(\"CORE_TIMEOUT\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activar unavailable",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{coreBaseUrl}}/__admin/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"unavailable\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Modo aplicado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().modo).to.eql(\"unavailable\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar durante indisponibilidad - 503",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 503 y código CORE_UNAVAILABLE\", function () {",
+                  "    pm.response.to.have.status(503);",
+                  "    pm.expect(pm.response.json().code).to.eql(\"CORE_UNAVAILABLE\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activar error",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{coreBaseUrl}}/__admin/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"error\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Modo aplicado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().modo).to.eql(\"error\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Consultar durante error - 502",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 502 y código CORE_ERROR\", function () {",
+                  "    pm.response.to.have.status(502);",
+                  "    pm.expect(pm.response.json().code).to.eql(\"CORE_ERROR\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activar normal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{coreBaseUrl}}/__admin/simulation",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mode\": \"normal\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Modo aplicado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().modo).to.eql(\"normal\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verificar recuperación - 200",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{businessBaseUrl}}/v1/customers/12345678/accounts"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Core restaurado\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().accounts).to.have.lengthOf(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
