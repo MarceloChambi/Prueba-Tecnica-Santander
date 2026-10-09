@@ -1,0 +1,101 @@
+openapi: 3.1.0
+info:
+  title: busaccbalv1 - Accounts and balances
+  version: 1.0.0
+  description: API de negocio para canales digitales. Los nombres de campos y códigos son siempre en inglés; los mensajes se localizan.
+servers:
+  - url: http://localhost:3000
+paths:
+  /health:
+    get:
+      summary: Liveness
+      responses:
+        '200':
+          description: Servicio activo
+  /v1/customers/{customerId}/accounts:
+    get:
+      summary: List customer accounts and available totals
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[0-9]{8}$' }
+        - name: currency
+          in: query
+          schema: { type: string, enum: [PEN, USD] }
+          description: Filtra cuentas y totales a una moneda.
+        - name: Accept-Language
+          in: header
+          schema: { type: string, example: es-PE,es;q=0.9 }
+          description: Se admite en y es. Inglés por defecto.
+      responses:
+        '200':
+          description: Cliente existente, incluso sin cuentas
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountsResponse' }
+              examples:
+                all:
+                  value:
+                    customerId: '12345678'
+                    accounts:
+                      - { accountId: '0011000001', product: SAVINGS, currency: PEN, status: ACTIVE, ledgerBalance: '1500.50', availableBalance: '1450.00' }
+                      - { accountId: '0011000002', product: CHECKING, currency: USD, status: ACTIVE, ledgerBalance: '320.00', availableBalance: '300.00' }
+                      - { accountId: '0011000003', product: SAVINGS, currency: PEN, status: BLOCKED, ledgerBalance: '50.00', availableBalance: '0.00' }
+                    totalAvailableByCurrency: { PEN: '1450.00', USD: '300.00' }
+                    requestId: 4a8463d2-729c-4084-81fc-004e56cedecd
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '502': { $ref: '#/components/responses/BadGateway' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+        '504': { $ref: '#/components/responses/Timeout' }
+components:
+  schemas:
+    Account:
+      type: object
+      additionalProperties: false
+      required: [accountId, product, currency, status, ledgerBalance, availableBalance]
+      properties:
+        accountId: { type: string }
+        product: { type: string, enum: [SAVINGS, CHECKING] }
+        currency: { type: string, enum: [PEN, USD] }
+        status: { type: string, enum: [ACTIVE, BLOCKED] }
+        ledgerBalance: { type: string, pattern: '^-?[0-9]+\.[0-9]{2}$', description: Decimal exacto con dos decimales }
+        availableBalance: { type: string, pattern: '^-?[0-9]+\.[0-9]{2}$', description: Decimal exacto con dos decimales }
+    AccountsResponse:
+      type: object
+      additionalProperties: false
+      required: [customerId, accounts, totalAvailableByCurrency, requestId]
+      properties:
+        customerId: { type: string, pattern: '^[0-9]{8}$' }
+        accounts: { type: array, items: { $ref: '#/components/schemas/Account' } }
+        totalAvailableByCurrency:
+          type: object
+          description: Incluye las monedas presentes en las cuentas devueltas; con filtro, incluye solo la moneda solicitada, incluso con cero cuentas.
+          propertyNames: { enum: [PEN, USD] }
+          additionalProperties: { type: string, pattern: '^-?[0-9]+\.[0-9]{2}$' }
+        requestId: { type: string }
+    Error:
+      type: object
+      additionalProperties: false
+      required: [code, message, requestId]
+      properties:
+        code: { type: string, enum: [INVALID_CUSTOMER_ID, INVALID_CURRENCY, CUSTOMER_NOT_FOUND, CORE_ERROR, CORE_UNAVAILABLE, CORE_TIMEOUT, INVALID_CORE_RESPONSE] }
+        message: { type: string, description: Texto localizado de acuerdo con Accept-Language }
+        requestId: { type: string }
+  responses:
+    BadRequest:
+      description: Cliente o moneda no válidos
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: El cliente no existe en el core
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    BadGateway:
+      description: Error o respuesta inválida del core
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unavailable:
+      description: Core no disponible
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Timeout:
+      description: Se agotó el tiempo de espera del core
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

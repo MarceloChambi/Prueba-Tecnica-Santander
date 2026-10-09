@@ -1,0 +1,33 @@
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:3.3.1
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports:
+      - "127.0.0.1:8000:8000"
+  ms-core:
+    build:
+      context: .
+      args: { MODULE: ms-core }
+    environment:
+      PORT: "3001"
+      DYNAMODB_ENDPOINT: http://dynamodb:8000
+      DYNAMODB_TABLE: ClientesCuentas
+      SPRING_PROFILES_ACTIVE: local
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - dynamodb
+    restart: on-failure
+  ms-business:
+    build:
+      context: .
+      args: { MODULE: ms-business }
+    environment:
+      PORT: "3000"
+      CORE_URL: http://ms-core:3001
+      CORE_TIMEOUT_MS: "1000"
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      - ms-core
+    restart: on-failure

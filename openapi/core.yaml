@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: simcoreaccv1 - Simulador del core
+  version: 1.0.0
+  description: API local del simulador. Campos y mensajes en español.
+servers:
+  - url: http://localhost:3001
+paths:
+  /health:
+    get:
+      summary: Liveness
+      responses:
+        '200': { description: Servicio activo }
+  /v1/clientes/{clienteId}/cuentas:
+    get:
+      parameters:
+        - name: clienteId
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[0-9]{8}$' }
+      responses:
+        '200':
+          description: Cliente existente, incluso sin cuentas
+          content: { application/json: { schema: { $ref: '#/components/schemas/Cliente' } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
+        '503': { $ref: '#/components/responses/Error' }
+  /__admin/simulation:
+    post:
+      summary: Cambia el modo de simulación; disponible solo con el perfil Spring local
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mode]
+              properties:
+                mode: { type: string, enum: [normal, slow, unavailable, error] }
+                delayMs: { type: integer, minimum: 0, maximum: 30000, default: 3000 }
+      responses:
+        '200': { description: Modo establecido }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { description: Control deshabilitado }
+components:
+  schemas:
+    Cuenta:
+      type: object
+      required: [cuentaId, productoId, monedaId, estado, saldoContable, saldoDisponible]
+      properties:
+        cuentaId: { type: string }
+        productoId: { type: string, enum: [AHO, CTE] }
+        monedaId: { type: string, enum: ['1', '2'] }
+        estado: { type: string, enum: [A, B] }
+        saldoContable: { type: number, multipleOf: 0.01 }
+        saldoDisponible: { type: number, multipleOf: 0.01 }
+    Cliente:
+      type: object
+      required: [clienteId, cuentas]
+      properties:
+        clienteId: { type: string, pattern: '^[0-9]{8}$' }
+        cuentas: { type: array, items: { $ref: '#/components/schemas/Cuenta' } }
+    Error:
+      type: object
+      required: [codigo, mensaje]
+      properties:
+        codigo: { type: string }
+        mensaje: { type: string }
+  responses:
+    Error:
+      description: Error del core en español
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
